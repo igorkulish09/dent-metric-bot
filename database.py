@@ -186,6 +186,21 @@ async def clear_appointment(order_id: int):
         await db.commit()
 
 
+async def list_scheduled_orders(master_id: int) -> list[dict]:
+    """Усі замовлення майстра, які мають призначену дату запису."""
+    async with aiosqlite.connect(DB_PATH) as db:
+        db.row_factory = aiosqlite.Row
+        cur = await db.execute(
+            """SELECT * FROM orders
+               WHERE master_id = ?
+                 AND appointment_date != ''
+               ORDER BY appointment_date, appointment_time""",
+            (master_id,),
+        )
+        rows = await cur.fetchall()
+        return [dict(r) for r in rows]
+
+
 async def list_orders_by_date(master_id: int, date_str: str) -> list[dict]:
     async with aiosqlite.connect(DB_PATH) as db:
         db.row_factory = aiosqlite.Row

@@ -117,33 +117,90 @@ def orders_list_kb(orders: list[dict]) -> InlineKeyboardMarkup:
 
 # ---------- календар ----------
 
-def calendar_kb(year: int, month: int, prefix: str) -> InlineKeyboardMarkup:
-    """Місячний календар кнопками. prefix визначає контекст:
-    'schcal' — вибір дати запису на ремонт, 'viewcal' — перегляд розкладу."""
-    rows = [[InlineKeyboardButton(text=f"{MONTHS_UA[month - 1]} {year}", callback_data="noop")]]
-    rows.append([InlineKeyboardButton(text=d, callback_data="noop") for d in WEEKDAYS_UA])
+def calendar_kb(
+    year: int,
+    month: int,
+    prefix: str,
+    occupied_dates: set[str] | None = None,
+) -> InlineKeyboardMarkup:
+    """Місячний календар із візуальним статусом днів.
+
+    🟢 — вільний робочий день
+    🔴 — день уже зайнятий записом
+    ⚪ — неділя / вихідний
+
+    occupied_dates передається у форматі YYYY-MM-DD.
+    """
+    occupied_dates = occupied_dates or set()
+
+    rows = [[
+        InlineKeyboardButton(
+            text=f"📅 {MONTHS_UA[month - 1]} {year}",
+            callback_data="noop",
+        )
+    ]]
+    rows.append([
+        InlineKeyboardButton(text=d, callback_data="noop")
+        for d in WEEKDAYS_UA
+    ])
 
     today = date.today()
     cal = pycal.Calendar(firstweekday=0)
+
     for week in cal.monthdayscalendar(year, month):
         row = []
         for day in week:
             if day == 0:
                 row.append(InlineKeyboardButton(text=" ", callback_data="noop"))
                 continue
-            label = f"•{day}" if date(year, month, day) == today else str(day)
-            row.append(InlineKeyboardButton(
-                text=label, callback_data=f"{prefix}:{year}:{month:02d}:{day:02d}",
-            ))
+
+            current = date(year, month, day)
+            date_str = current.isoformat()
+
+            if current.weekday() == 6:
+                # Неділя — завжди вихідний і не натискається.
+                label = f"⚪{day}"
+                callback_data = "noop"
+            elif date_str in occupied_dates:
+                # Зайнятий день. У режимі вибору запису його не можна
+                # обрати, щоб не створити накладку.
+                label = f"🔴{day}"
+                callback_data = f"{prefix}busy:{year}:{month:02d}:{day:02d}"
+            else:
+                label = f"🟢{day}"
+                if current == today:
+                    label = f"🟢•{day}"
+                callback_data = f"{prefix}:{year}:{month:02d}:{day:02d}"
+
+            row.append(
+                InlineKeyboardButton(text=label, callback_data=callback_data)
+            )
         rows.append(row)
 
     prev_month, prev_year = (12, year - 1) if month == 1 else (month - 1, year)
     next_month, next_year = (1, year + 1) if month == 12 else (month + 1, year)
+
     rows.append([
-        InlineKeyboardButton(text="◀️", callback_data=f"{prefix}nav:{prev_year}:{prev_month:02d}"),
-        InlineKeyboardButton(text="❌ Закрити", callback_data=f"{prefix}cancel"),
-        InlineKeyboardButton(text="▶️", callback_data=f"{prefix}nav:{next_year}:{next_month:02d}"),
+        InlineKeyboardButton(
+            text="◀️",
+            callback_data=f"{prefix}nav:{prev_year}:{prev_month:02d}",
+        ),
+        InlineKeyboardButton(
+            text="❌ Закрити",
+            callback_data=f"{prefix}cancel",
+        ),
+        InlineKeyboardButton(
+            text="▶️",
+            callback_data=f"{prefix}nav:{next_year}:{next_month:02d}",
+        ),
     ])
+
+    rows.append([
+        InlineKeyboardButton(text="🟢 Вільно", callback_data="noop"),
+        InlineKeyboardButton(text="🔴 Зайнято", callback_data="noop"),
+        InlineKeyboardButton(text="⚪ Неділя", callback_data="noop"),
+    ])
+
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
