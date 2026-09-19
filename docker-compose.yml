@@ -1,0 +1,31 @@
+services:
+  postgres:
+    image: postgres:17
+    container_name: dent_metric_db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-dent_metric}
+      POSTGRES_USER: ${POSTGRES_USER:-dent_metric}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-dent_metric}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-dent_metric} -d ${POSTGRES_DB:-dent_metric}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  bot:
+    build: .
+    container_name: dent_metric_bot
+    restart: unless-stopped
+    env_file: .env
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      - generated_docs:/app/generated
+
+volumes:
+  postgres_data:
+  generated_docs:
